@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>วิเคราะห์คู่บอล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=Sarabun:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one column — search card, then a verdict, then reasons in plain words, details folded away */
+:root{
+  --bg:#eef2ec; --surface:#ffffff; --sunk:#f4f7f2; --ink:#16211a; --muted:#5a6a60; --line:#d3ddd4;
+  --home:#13764a; --away:#2c58b0; --draw:#8b958e; --accent:#d9a400; --bad:#b4372b;
+  --f-display:"Bai Jamjuree","Sarabun",system-ui,sans-serif;
+  --f-body:"Sarabun",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1411; --surface:#161f1a; --sunk:#111915; --ink:#e4ebe6; --muted:#97a69d; --line:#2a3730;
+  --home:#3fbd7c; --away:#7199ec; --draw:#7d8a82; --accent:#f0c53e; --bad:#e8685b; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 56px}
+[hidden]{display:none!important}
+.wrap{max-width:760px;margin:0 auto;display:grid;gap:18px}
+h1{font:700 clamp(26px,5vw,36px)/1.15 var(--f-display);margin:0}
+h1+p{margin:4px 0 0;color:var(--muted)}
+h2{font:600 18px/1.3 var(--f-display);margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:14px;min-width:0}
+.pick{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end}
+@media (max-width:560px){.pick{grid-template-columns:1fr}.pick .vs{display:none}}
+.pick label{display:grid;gap:4px;font:600 13px var(--f-display);letter-spacing:.03em}
+.pick label.h{color:var(--home)}.pick label.a{color:var(--away)}
+.pick .vs{font:600 14px var(--f-display);color:var(--muted);padding-bottom:12px}
+input,button{font:inherit;color:inherit}
+input[type=text]{width:100%;background:var(--sunk);border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:17px}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.go{background:var(--ink);color:var(--surface);border:0;border-radius:9px;padding:13px;font:600 17px var(--f-display);cursor:pointer}
+.go:disabled{opacity:.55;cursor:wait}
+.hint{font-size:13px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--sunk);border:1px solid var(--line);border-radius:99px;padding:3px 11px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.status{font-size:14px;color:var(--muted)}
+.err{color:var(--bad);font-size:15px}
+
+.teams{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;text-align:center}
+.team{display:grid;justify-items:center;gap:4px;min-width:0}
+.team img{width:56px;height:56px;object-fit:contain}
+.team b{font:600 17px/1.25 var(--f-display);overflow-wrap:anywhere}
+.team span{font-size:12px;color:var(--muted)}
+.meta{font-size:13px;color:var(--muted);text-align:center}
+.verdict{font:700 clamp(20px,4vw,26px)/1.3 var(--f-display);text-align:center;text-wrap:balance}
+.tag{justify-self:center;font:600 12px var(--f-display);letter-spacing:.05em;padding:2px 10px;border-radius:99px;background:var(--accent);color:#1b1600}
+.pbar{display:flex;height:40px;border-radius:9px;overflow:hidden;font:600 15px var(--f-num)}
+.pbar div{display:flex;align-items:center;justify-content:center;color:#fff;min-width:0;white-space:nowrap;transition:flex-basis .4s}
+.pleg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:13px;text-align:center;color:var(--muted)}
+.pleg b{display:block;font:600 18px var(--f-num);color:var(--ink)}
+.scores{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.sc{background:var(--sunk);border-radius:9px;padding:6px 14px;text-align:center}
+.sc b{display:block;font:600 22px var(--f-num)}
+.sc span{font-size:12px;color:var(--muted)}
+.sc.first{outline:2px solid var(--accent)}
+ul.why{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+ul.why li{display:grid;grid-template-columns:10px 1fr;gap:10px;align-items:start}
+ul.why i{width:10px;height:10px;border-radius:3px;margin-top:8px}
+.market{background:var(--sunk);border-radius:9px;padding:12px 14px;font-size:15px}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px}
+table.cmp td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:center;font-variant-numeric:tabular-nums}
+table.cmp td:nth-child(2){color:var(--muted);font-size:13px;width:38%}
+table.cmp td.win{font-weight:600}
+.fm{display:inline-flex;gap:2px}
+.fm i{font:600 11px/20px var(--f-display);width:20px;border-radius:4px;color:#fff;font-style:normal}
+.fm i.W{background:var(--home)}.fm i.D{background:var(--draw)}.fm i.L{background:var(--bad)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font:600 16px var(--f-display)}
+.adj{display:grid;gap:12px;margin-top:12px}
+.adj .row{display:grid;gap:6px}
+.adj .row>span{font-size:14px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:14px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+.kpi{background:var(--sunk);border-radius:8px;padding:8px 10px}
+.kpi span{display:block;font-size:12px;color:var(--muted)}
+.kpi b{font:600 16px var(--f-num)}
+.tbl-wrap{overflow-x:auto;margin-top:12px}
+table.grid-s{border-collapse:separate;border-spacing:3px;font:500 12px var(--f-num);margin:0 auto}
+table.grid-s th{color:var(--muted);font-weight:500;padding:2px 4px}
+table.grid-s td{width:46px;height:30px;text-align:center;border-radius:5px}
+.note{font-size:12px;color:var(--muted);line-height:1.55}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>วิเคราะห์คู่บอล</h1>
+    <p>พิมพ์ชื่อสองทีม โปรแกรมจะดึงข้อมูลล่าสุดจากอินเทอร์เน็ตแล้วสรุปให้ว่าใครได้เปรียบ เพราะอะไร</p>
+  </header>
+
+  <form class="card" id="f">
+    <div class="pick">
+      <label class="h" for="tH">เจ้าบ้าน<input type="text" id="tH" list="aliases" placeholder="เช่น ลิเวอร์พูล หรือ Liverpool" autocomplete="off" required></label>
+      <div class="vs">พบ</div>
+      <label class="a" for="tA">ทีมเยือน<input type="text" id="tA" list="aliases" placeholder="เช่น อาร์เซนอล หรือ Arsenal" autocomplete="off" required></label>
+    </div>
+    <button class="go" id="go" type="submit">วิเคราะห์</button>
+    <div class="chips" id="examples"><span class="hint">ลองเลย:</span></div>
+    <div class="status" id="msg" aria-live="polite"></div>
+    <datalist id="aliases"></datalist>
+  </form>
+
+  <section id="out" hidden>
+    <div class="card">
+      <div class="teams">
+        <div class="team"><img id="lgH" alt=""><b class="h-c" id="nmH"></b><span id="lgNH"></span></div>
+        <div class="hint">พบ</div>
+        <div class="team"><img id="lgA" alt=""><b id="nmA"></b><span id="lgNA"></span></div>
+      </div>
+      <div class="meta" id="meta"></div>
+      <span class="tag" id="tag"></span>
+      <div class="verdict" id="verdict"></div>
+      <div class="pbar"><div id="bH" style="background:var(--home)"></div><div id="bD" style="background:var(--draw)"></div><div id="bA" style="background:var(--away)"></div></div>
+      <div class="pleg">
+        <div><span id="cH"></span> ชนะ<b id="pH"></b></div>
+        <div>เสมอ<b id="pD"></b></div>
+        <div><span id="cA"></span> ชนะ<b id="pA"></b></div>
+      </div>
+      <h2>สกอร์ที่น่าจะออก</h2>
+      <div class="scores" id="scores"></div>
+    </div>
+
+    <div class="card">
+      <h2>ทำไมถึงออกมาแบบนี้</h2>
+      <ul class="why" id="why"></ul>
+      <div class="market" id="market" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>เทียบกันชัดๆ</h2>
+      <table class="cmp" id="cmp"></table>
+
+      <details id="adjBox">
+        <summary>รู้ข่าวเพิ่ม? ปรับได้ตรงนี้</summary>
+        <div class="adj" id="adj"></div>
+        <p class="note">ข้อมูลออนไลน์ไม่มีข่าวนักเตะเจ็บและแรงจูงใจ ถ้าคุณรู้ข่าวให้กดเลือก ผลจะคำนวณใหม่ทันที</p>
+      </details>
+
+      <details>
+        <summary>ตัวเลขเชิงลึก</summary>
+        <div class="kpis" id="kpis"></div>
+        <div class="tbl-wrap"><table class="grid-s" id="sgrid"></table></div>
+        <p class="note">แถว = ประตูเจ้าบ้าน, คอลัมน์ = ประตูทีมเยือน, ตัวเลขเป็น %</p>
+      </details>
+    </div>
+
+    <p class="note">ข้อมูลจาก ESPN (ฟอร์ม ตารางคะแนน สถิติประตู ตารางแข่ง ราคาตลาด) คำนวณด้วยโมเดลปัวซองซึ่งเป็นวิธีมาตรฐานในการคาดผลฟุตบอล ผลลัพธ์คือโอกาส ไม่ใช่การรับประกัน</p>
+  </section>
+</div>
+
+<script>
+const API="https://site.api.espn.com/apis/site/v2/sports/soccer";
+const ALIAS={"ลิเวอร์พูล":"Liverpool","หงส์แดง":"Liverpool","อาร์เซนอล":"Arsenal","ปืนใหญ่":"Arsenal","เชลซี":"Chelsea","แมนยู":"Manchester United","แมนเชสเตอร์ยูไนเต็ด":"Manchester United","ผีแดง":"Manchester United","แมนซิตี้":"Manchester City","เรือใบ":"Manchester City","สเปอร์ส":"Tottenham Hotspur","ท็อตแนม":"Tottenham Hotspur","นิวคาสเซิล":"Newcastle United","แอสตันวิลลา":"Aston Villa","เวสต์แฮม":"West Ham United","ไบรท์ตัน":"Brighton","เอฟเวอร์ตัน":"Everton","บาร์เซโลนา":"Barcelona","บาร์ซ่า":"Barcelona","เรอัลมาดริด":"Real Madrid","แอตเลติโก":"Atletico Madrid","บาเยิร์น":"Bayern Munich","ดอร์ทมุนด์":"Borussia Dortmund","ยูเวนตุส":"Juventus","อินเตอร์":"Internazionale","มิลาน":"AC Milan","นาโปลี":"Napoli","โรมา":"AS Roma","เปแอสเช":"Paris Saint-Germain","ปารีส":"Paris Saint-Germain","บุรีรัมย์":"Buriram United","ท่าเรือ":"Port FC","บางกอกยูไนเต็ด":"Bangkok United","เมืองทอง":"Muangthong United"};
+aliases.innerHTML=Object.keys(ALIAS).map(k=>`<option value="${k}">`).join("");
+[["Liverpool","Arsenal"],["Real Madrid","Barcelona"],["Manchester United","Chelsea"],["Bayern Munich","Borussia Dortmund"]].forEach(([h,a])=>{
+  const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=`${h} - ${a}`;
+  b.onclick=()=>{tH.value=h;tA.value=a;f.requestSubmit()};examples.appendChild(b)});
+
+const getJSON=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()};
+const clamp=(x,a=-1,b=1)=>Math.max(a,Math.min(b,x));
+const num=s=>s==null?NaN:typeof s==="object"?(s.value??parseFloat(s.displayValue)):parseFloat(s);
+const DAY=864e5;
+
+async function findTeam(q){
+  q=q.trim();const term=ALIAS[q.replace(/\s/g,"")]||q;
+  const d=await getJSON(`https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(term)}&limit=20`);
+  const list=(d.results||[]).filter(r=>r.type==="team").flatMap(r=>r.contents||[]).filter(c=>(c.uid||"").startsWith("s:600~t:"));
+  if(!list.length)throw new Error(`ไม่พบทีม "${q}" ลองพิมพ์ชื่อภาษาอังกฤษ`);
+  return list[0].uid.split("t:")[1];
+}
+const stCache={};
+const standings=slug=>stCache[slug]||=getJSON(`https://site.api.espn.com/apis/v2/sports/soccer/${slug}/standings`)
+  .then(d=>(d.children||[]).flatMap(c=>c.standings?.entries||[])).catch(()=>[]);
+async function loadTeam(id){
+  const [res,fx]=await Promise.all([
+    getJSON(`${API}/all/teams/${id}/schedule`),
+    getJSON(`${API}/all/teams/${id}/schedule?fixture=true`).catch(()=>({events:[]}))]);
+  const t=res.team||{}, ss=t.standingSummary||"", evs=res.events||[];
+  // domestic league = the one named in "2nd in English Premier League", else the most played competition
+  let lg=evs.map(e=>e.league).find(l=>l?.name&&ss.includes(l.name));
+  if(!lg){const n={};evs.forEach(e=>{const s=e.league?.slug;if(s&&!/friendly/i.test(s)&&!e.league.isTournament)n[s]=(n[s]||0)+1});
+    const s=Object.keys(n).sort((a,b)=>n[b]-n[a])[0];lg=evs.map(e=>e.league).find(l=>l?.slug===s)}
+  const slug=lg?.slug||"";
+  let games=parseGames(evs,id).map(g=>({...g,cur:true}));
+  if(games.length<6){try{const y=(res.requestedSeason?.year||new Date().getFullYear())-1;
+    games=games.concat(parseGames((await getJSON(`${API}/all/teams/${id}/schedule?season=${y}`)).events,id))}catch{}}
+  games.sort((a,b)=>b.date-a.date);
+  const entries=slug?await standings(slug):[], me=entries.find(e=>e.team?.id==id);
+  const st=me?Object.fromEntries(me.stats.map(x=>[x.name,x.value])):{};
+  const rec={...st};
+  for(const side of["home","away"]){const lgG=games.filter(g=>g.cur&&g.slug===slug&&g.home===(side==="home"));
+    rec[side+"GamesPlayed"]=lgG.length;rec[side+"Wins"]=lgG.filter(g=>g.r==="W").length;rec[side+"Ties"]=lgG.filter(g=>g.r==="D").length;
+    rec[side+"PointsFor"]=lgG.reduce((s,g)=>s+g.gf,0);rec[side+"PointsAgainst"]=lgG.reduce((s,g)=>s+g.ga,0)}
+  return{id,name:t.displayName||"ทีม "+id,logo:t.logo||"",league:lg?.shortName||lg?.name||"",slug,rec,games,fixtures:fx.events||[],standing:ss};
+}
+function parseGames(evs,id){
+  return(evs||[]).filter(e=>!/friendly/i.test(e.league?.slug||"")).map(e=>{const c=e.competitions?.[0];if(!c?.status?.type?.completed)return null;
+    const me=c.competitors.find(x=>x.team?.id==id),op=c.competitors.find(x=>x.team?.id!=id);if(!me||!op)return null;
+    const gf=num(me.score),ga=num(op.score);if(isNaN(gf)||isNaN(ga))return null;
+    return{date:new Date(e.date),gf,ga,home:me.homeAway==="home",opp:op.team.displayName,oppId:op.team.id,slug:e.league?.slug,comp:e.league?.abbreviation||e.league?.name||"",r:gf>ga?"W":gf<ga?"L":"D"}}).filter(Boolean)
+}
+async function leagueAvg(slug){
+  try{const en=slug?await standings(slug):[];let g=0,p=0;
+    en.forEach(e=>{const s=Object.fromEntries(e.stats.map(x=>[x.name,x.value]));g+=s.pointsFor||0;p+=s.gamesPlayed||0});
+    return{avg:p>=20?g/p:1.35,size:en.length||20}}catch{return{avg:1.35,size:20}}
+}
+function moneyToP(ml){ml=+ml;if(!ml)return 0;return ml>0?100/(ml+100):-ml/(-ml+100)}
+
+let T=null;  // fetched data
+const ADJ={injH:0,injA:0,motH:0,motA:0};
+
+f.onsubmit=async e=>{
+  e.preventDefault();go.disabled=true;msg.className="status";msg.textContent="กำลังค้นหาทีม…";
+  try{
+    const [idH,idA]=await Promise.all([findTeam(tH.value),findTeam(tA.value)]);
+    if(idH===idA)throw new Error("สองช่องเป็นทีมเดียวกัน");
+    msg.textContent="กำลังดึงผลการแข่งขันและตารางคะแนน…";
+    let [H,A]=await Promise.all([loadTeam(idH),loadTeam(idA)]);
+    // look for the real fixture between them
+    let fx=H.fixtures.find(ev=>ev.competitions?.[0]?.competitors?.some(c=>c.team?.id==idA)), venue="", when=new Date(), comp="", odds=null;
+    if(fx){const c=fx.competitions[0];when=new Date(fx.date);comp=fx.league?.name||"";venue=c.venue?.fullName||"";
+      if(c.competitors.find(x=>x.homeAway==="home")?.team?.id==idA)[H,A]=[A,H];
+      msg.textContent="กำลังดึงราคาตลาด…";
+      try{const s=await getJSON(`${API}/${fx.league?.slug||H.slug}/summary?event=${fx.id}`);const o=(s.odds||s.pickcenter||[])[0];
+        if(o){const ph=moneyToP(o.homeTeamOdds?.moneyLine),pa=moneyToP(o.awayTeamOdds?.moneyLine),pd=moneyToP(o.drawOdds?.moneyLine),t=ph+pa+pd;
+          if(t>0&&pd)odds={h:ph/t,d:pd/t,a:pa/t,src:o.provider?.name||""}}}catch{}}
+    const [LH,LA]=await Promise.all([leagueAvg(H.slug),H.slug===A.slug?null:leagueAvg(A.slug)]);
+    T={H,A,when,venue,comp,odds,fixture:!!fx,L:LA?(LH.avg+LA.avg)/2:LH.avg,size:LH.size,sameLeague:!!H.slug&&H.slug===A.slug};
+    Object.assign(ADJ,{injH:0,injA:0,motH:0,motA:0});
+    buildAdj();render();msg.textContent="";out.hidden=false;out.scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(err){msg.className="err";msg.textContent=/[ก-๙]/.test(err.message||"")?err.message:"ดึงข้อมูลไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"}
+  go.disabled=false;
+};
+
+// ---------- model ----------
+function teamStats(t,asHome,when){
+  const g=t.games.filter(x=>x.date<when), last10=g.slice(0,10), last5=g.slice(0,5);
+  const avg=(a,k)=>a.length?a.reduce((s,x)=>s+x[k],0)/a.length:NaN;
+  const r=t.rec, gp=r.gamesPlayed||0;
+  const vgp=asHome?r.homeGamesPlayed:r.awayGamesPlayed;
+  const vgf=asHome?r.homePointsFor:r.awayPointsFor, vga=asHome?r.homePointsAgainst:r.awayPointsAgainst;
+  const vpts=asHome?(r.homeWins*3+r.homeTies):(r.awayWins*3+r.awayTies);
+  const pts5=last5.reduce((s,x)=>s+(x.r==="W"?3:x.r==="D"?1:0),0);
+  return{gf10:avg(last10,"gf"),ga10:avg(last10,"ga"),
+    gfS:gp?r.pointsFor/gp:NaN,gaS:gp?r.pointsAgainst/gp:NaN,ppg:gp?(r.wins*3+r.ties)/gp:(last10.length?last10.reduce((s,x)=>s+(x.r==="W"?3:x.r==="D"?1:0),0)/last10.length:1.3),
+    vppg:vgp?vpts/vgp:NaN,vgf:vgp?vgf/vgp:NaN,vga:vgp?vga/vgp:NaN,vgp:vgp||0,
+    rank:r.rank||0,gp,last5,pts5,rest:g.length?Math.round((when-g[0].date)/DAY):7,lastOpp:g[0]?.opp}
+}
+const mix=(...v)=>{const ok=v.filter(x=>!isNaN(x));return ok.length?ok.reduce((a,b)=>a+b,0)/ok.length:1.3};
+function pois(l,k){let p=Math.exp(-l);for(let i=1;i<=k;i++)p*=l/i;return p}
+
+function compute(){
+  const {H,A,when,L}=T, h=teamStats(H,true,when), a=teamStats(A,false,when);
+  const attH=mix(h.gf10,h.gfS,h.vgp>=2?h.vgf:NaN)/L, defH=mix(h.ga10,h.gaS,h.vgp>=2?h.vga:NaN)/L;
+  const attA=mix(a.gf10,a.gfS,a.vgp>=2?a.vgf:NaN)/L, defA=mix(a.ga10,a.gaS,a.vgp>=2?a.vga:NaN)/L;
+  let lh=L*attH*defA*1.08, la=L*attA*defH*0.94;
+  // head to head this season (and last, if loaded)
+  const h2h=H.games.filter(x=>x.oppId==A.id).slice(0,6);
+  const hw=h2h.filter(x=>x.r==="W").length, aw=h2h.filter(x=>x.r==="L").length;
+  const F=[
+    {k:"form",w:18,e:(h.pts5-a.pts5)/15},
+    {k:"ppg",w:16,e:clamp((h.ppg-a.ppg)/2)},
+    {k:"venue",w:12,e:(!isNaN(h.vppg)&&!isNaN(a.vppg))?clamp((h.vppg-a.vppg)/2):0},
+    {k:"rank",w:8,e:T.sameLeague&&h.rank&&a.rank?clamp((a.rank-h.rank)/(T.size-1)):0},
+    {k:"rest",w:8,e:clamp((Math.min(h.rest,6)-Math.min(a.rest,6))/4)},
+    {k:"h2h",w:6,e:h2h.length?(hw-aw)/h2h.length*Math.min(1,h2h.length/4):0},
+    {k:"inj",w:18,e:(ADJ.injA-ADJ.injH)/2},
+    {k:"mot",w:10,e:ADJ.motH-ADJ.motA},
+  ];
+  const ws=F.reduce((s,x)=>s+x.w,0);F.forEach(x=>x.c=x.w*clamp(x.e)/ws);
+  const D=F.reduce((s,x)=>s+x.c,0);
+  lh=clamp(lh*Math.exp(.55*D),.15,5);la=clamp(la*Math.exp(-.55*D),.15,5);
+  const RHO=-.06,g=[];let tot=0;
+  for(let i=0;i<=10;i++){g[i]=[];for(let j=0;j<=10;j++){let t=1;
+    if(!i&&!j)t=1-lh*la*RHO;else if(!i&&j===1)t=1+lh*RHO;else if(i===1&&!j)t=1+la*RHO;else if(i===1&&j===1)t=1-RHO;
+    tot+=g[i][j]=pois(lh,i)*pois(la,j)*t}}
+  let pH=0,pD=0,pA=0,o25=0,bt=0;const cells=[];
+  for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const p=g[i][j]/=tot;if(i>j)pH+=p;else if(i<j)pA+=p;else pD+=p;if(i+j>2)o25+=p;if(i&&j)bt+=p;cells.push({i,j,p})}
+  cells.sort((x,y)=>y.p-x.p);
+  return{h,a,lh,la,g,pH,pD,pA,o25,bt,top:cells.slice(0,4),F,h2h,hw,aw}
+}
+
+// ---------- view ----------
+const pct=p=>Math.round(p*100)+"%";
+const fm=l=>`<span class="fm">${l.map(x=>`<i class="${x.r}" title="${x.gf}-${x.ga} ${x.home?"vs":"@"} ${x.opp}">${{W:"ช",D:"ส",L:"พ"}[x.r]}</i>`).join("")}</span>`;
+const f1=x=>isNaN(x)?"–":x.toFixed(2);
+function reasons(r){
+  const {H,A}=T,h=r.h,a=r.a,out=[],who=c=>c>=0?"var(--home)":"var(--away)";
+  const add=(c,t)=>Math.abs(c)>.006&&out.push({c,t});
+  const F=Object.fromEntries(r.F.map(x=>[x.k,x.c]));
+  add(F.form,h.pts5===a.pts5?"":`ฟอร์มช่วงนี้ ${F.form>0?H.name:A.name} ดีกว่า: 5 นัดหลัง ${H.name} เก็บ ${h.pts5} แต้ม ส่วน ${A.name} เก็บ ${a.pts5} แต้ม`);
+  add(F.ppg,`ผลงานทั้งฤดูกาล ${F.ppg>0?H.name:A.name} เก็บแต้มได้มากกว่า (เฉลี่ย ${h.ppg.toFixed(2)} กับ ${a.ppg.toFixed(2)} แต้มต่อนัด)`);
+  if(!isNaN(h.vppg)&&!isNaN(a.vppg))add(F.venue,F.venue>0?`${H.name} เล่นในบ้านเก่ง (${h.vppg.toFixed(2)} แต้ม/นัด) ขณะที่ ${A.name} เล่นนอกบ้านได้ ${a.vppg.toFixed(2)} แต้ม/นัด`:`${A.name} เล่นนอกบ้านได้ดี (${a.vppg.toFixed(2)} แต้ม/นัด) มากกว่าที่ ${H.name} ทำในบ้าน (${h.vppg.toFixed(2)})`);
+  if(T.sameLeague&&h.rank&&a.rank)add(F.rank,`อันดับในตาราง: ${H.name} อันดับ ${h.rank} ส่วน ${A.name} อันดับ ${a.rank}`);
+  add(F.rest,`ความสด: ${H.name} พักมา ${h.rest} วัน, ${A.name} พักมา ${a.rest} วัน`);
+  if(r.h2h.length)add(F.h2h,`เจอกันล่าสุด ${r.h2h.length} นัด ${H.name} ชนะ ${r.hw} เสมอ ${r.h2h.length-r.hw-r.aw} แพ้ ${r.aw}`);
+  add(F.inj,`ข่าวนักเตะเจ็บที่คุณใส่ทำให้ ${F.inj>0?H.name:A.name} ได้เปรียบ`);
+  add(F.mot,`แรงจูงใจที่คุณใส่ทำให้ ${F.mot>0?H.name:A.name} ได้เปรียบ`);
+  out.push({c:.0001,t:`ได้เล่นในบ้าน ${H.name} มีแฟนบอลหนุนหลัง (ข้อได้เปรียบพื้นฐานราว 10–15% ของประตู)`});
+  const goals=r.lh+r.la;
+  out.push({c:0,t:goals>2.9?`ทั้งสองทีมยิงและเสียประตูค่อนข้างเยอะ คาดว่าเกมจะมีประตูราว ${goals.toFixed(1)} ลูก`:goals<2.2?`ทั้งสองทีมเกมรับดีหรือยิงไม่ค่อยเข้า คาดว่าเกมจะออกน้อยราว ${goals.toFixed(1)} ลูก`:`คาดว่าเกมจะมีประตูราว ${goals.toFixed(1)} ลูก`});
+  if(!T.sameLeague)out.push({c:0,t:"สองทีมอยู่คนละลีก หรือหาข้อมูลลีกฤดูกาลนี้ไม่เจอ การเทียบสถิติอาจคลาดเคลื่อนได้"});
+  const stale=[[H,h],[A,a]].filter(([t,s])=>s.last5.length<5||(T.when-s.last5[s.last5.length-1].date)/DAY>120).map(([t])=>t.name);
+  if(stale.length)out.push({c:-0.0001*0,t:`ข้อมูลของ ${stale.join(" และ ")} ไม่ครบหรือเก่าเกิน 4 เดือน (แหล่งข้อมูลอาจไม่มีลีกนี้ในฤดูกาลปัจจุบัน) ควรดูผลลัพธ์อย่างระมัดระวัง`});
+  return out.filter(x=>x.t).sort((x,y)=>Math.abs(y.c)-Math.abs(x.c)).map(x=>`<li><i style="background:${x.c===0?"var(--draw)":who(x.c)}"></i><span>${x.t}</span></li>`).join("");
+}
+function render(){
+  const r=compute(),{H,A}=T;
+  nmH.textContent=H.name;nmA.textContent=A.name;nmH.style.color="var(--home)";nmA.style.color="var(--away)";
+  lgH.src=H.logo;lgA.src=A.logo;lgNH.textContent=H.standing||H.league;lgNA.textContent=A.standing||A.league;
+  meta.textContent=T.fixture?[T.when.toLocaleString("th-TH",{dateStyle:"long",timeStyle:"short"}),T.comp,T.venue].filter(Boolean).join(" · "):"ไม่พบนัดที่จะเจอกันเร็วๆ นี้ วิเคราะห์โดยให้ทีมซ้ายเป็นเจ้าบ้าน";
+  cH.textContent=H.name;cA.textContent=A.name;
+  [["H",r.pH],["D",r.pD],["A",r.pA]].forEach(([k,p])=>{const b=document.getElementById("b"+k);b.style.flexBasis=p*100+"%";b.textContent=p>.09?pct(p):"";document.getElementById("p"+k).textContent=pct(p)});
+  const s=[r.pH,r.pD,r.pA].sort((x,y)=>y-x),gap=s[0]-s[1],best=s[0];
+  tag.textContent=gap>.25?"ได้เปรียบชัดเจน":gap>.1?"ค่อนข้างได้เปรียบ":"สูสีมาก";
+  verdict.textContent=best===r.pD?"มีแนวโน้มเสมอกัน":`${best===r.pH?H.name:A.name} มีโอกาสชนะมากกว่า`;
+  scores.innerHTML=r.top.map((c,i)=>`<div class="sc${i?"":" first"}"><b>${c.i} - ${c.j}</b><span>${pct(c.p)}</span></div>`).join("");
+  why.innerHTML=reasons(r);
+  if(T.odds){const o=T.odds,mine=r.pH-o.h;market.hidden=false;
+    market.innerHTML=`<b>ราคาตลาด${o.src?" ("+o.src+")":""}</b> ให้ ${H.name} ชนะ ${pct(o.h)} · เสมอ ${pct(o.d)} · ${A.name} ชนะ ${pct(o.a)}<br>`+
+      (Math.abs(mine)<.05?"โปรแกรมกับตลาดมองตรงกัน":`โปรแกรมมอง ${mine>0?H.name:A.name} ดีกว่าที่ตลาดคิดราว ${Math.round(Math.abs(mine)*100)}%`)}
+  else market.hidden=true;
+  const h=r.h,a=r.a,row=(lab,x,y,hi=1)=>{const hx=+x,ay=+y,c=isNaN(hx)||isNaN(ay)||hx===ay?["",""]:(hi?hx>ay:hx<ay)?["win",""]:["","win"];
+    return`<tr><td class="${c[0]}">${isNaN(hx)?"–":x}</td><td>${lab}</td><td class="${c[1]}">${isNaN(ay)?"–":y}</td></tr>`};
+  cmp.innerHTML=`<tr><td><b style="color:var(--home)">${H.name}</b></td><td></td><td><b style="color:var(--away)">${A.name}</b></td></tr>`+
+    `<tr><td>${fm(h.last5)}</td><td>ฟอร์ม 5 นัด (ซ้าย = ล่าสุด)</td><td>${fm(a.last5)}</td></tr>`+
+    row("แต้มจาก 5 นัดหลัง",h.pts5,a.pts5)+
+    (T.sameLeague?row("อันดับในลีก",h.rank||"–",a.rank||"–",0):"")+
+    row("แต้มเฉลี่ยต่อนัด (ลีก)",h.ppg.toFixed(2),a.ppg.toFixed(2))+
+    row("ยิงได้เฉลี่ย 10 นัดหลัง",f1(h.gf10),f1(a.gf10))+
+    row("เสียเฉลี่ย 10 นัดหลัง",f1(h.ga10),f1(a.ga10),0)+
+    row("แต้ม/นัด ในบ้าน vs นอกบ้าน",f1(h.vppg),f1(a.vppg))+
+    row("วันพักก่อนนัดนี้",h.rest,a.rest);
+  kpis.innerHTML=[["ประตูที่คาด "+H.name,r.lh.toFixed(2)],["ประตูที่คาด "+A.name,r.la.toFixed(2)],["สูงกว่า 2.5 ลูก",pct(r.o25)],["ยิงได้ทั้งสองทีม",pct(r.bt)],
+    ["ราคายุติธรรม เจ้าบ้าน",(1/r.pH).toFixed(2)],["ราคายุติธรรม เสมอ",(1/r.pD).toFixed(2)],["ราคายุติธรรม ทีมเยือน",(1/r.pA).toFixed(2)]].map(([k,v])=>`<div class="kpi"><span>${k}</span><b>${v}</b></div>`).join("");
+  let mx=r.top[0].p,g="<tr><th></th>"+[0,1,2,3,4,5].map(j=>`<th>${j}</th>`).join("")+"</tr>";
+  for(let i=0;i<=5;i++){g+=`<tr><th>${i}</th>`;for(let j=0;j<=5;j++){const p=r.g[i][j],col=i>j?"var(--home)":i<j?"var(--away)":"var(--draw)";
+    g+=`<td style="background:color-mix(in srgb,${col} ${Math.round(p/mx*70)}%,transparent)">${(p*100).toFixed(1)}</td>`}g+="</tr>"}
+  sgrid.innerHTML=g;
+}
+function buildAdj(){
+  const seg=(key,opts)=>`<div class="seg">${opts.map(([v,t])=>`<button type="button" data-a="${key}" data-v="${v}" aria-pressed="${ADJ[key]==v}">${t}</button>`).join("")}</div>`;
+  const inj=[[0,"ครบทีม"],[1,"ขาดตัวหลักบางคน"],[2,"ขาดตัวหลักหลายคน"]], mot=[[0,"ปกติ"],[1,"สูงมาก (ลุ้นแชมป์/หนีตก/ดาร์บี้)"],[-1,"ต่ำ (ไม่มีอะไรต้องเสีย)"]];
+  adj.innerHTML=`<div class="row"><span>${T.H.name}: นักเตะเจ็บ/โดนแบน</span>${seg("injH",inj)}</div>
+    <div class="row"><span>${T.A.name}: นักเตะเจ็บ/โดนแบน</span>${seg("injA",inj)}</div>
+    <div class="row"><span>${T.H.name}: แรงจูงใจ</span>${seg("motH",mot)}</div>
+    <div class="row"><span>${T.A.name}: แรงจูงใจ</span>${seg("motA",mot)}</div>`;
+}
+adj.onclick=e=>{const b=e.target.closest("button[data-a]");if(!b)return;ADJ[b.dataset.a]=+b.dataset.v;
+  adj.querySelectorAll(`[data-a=${b.dataset.a}]`).forEach(x=>x.setAttribute("aria-pressed",x===b));render()};
+</script>
+</body>
+</html>
